@@ -8,3 +8,5 @@
 [**Обмен рублей**](/ru_exchange.md)
 
 [**Где попить пива**](/beer_places.md)
+
+[**Где поесть**](/food_places.md)
