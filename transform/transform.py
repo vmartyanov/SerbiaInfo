@@ -50,6 +50,7 @@ def main() -> None:
             json_src = json.load(file)
 
         for place in json_src:
+            print (place["name"])
             osm_id = place["id"]
             osm_data = get_osm_data(osm_id)
             json_osm = json.loads(osm_data)
@@ -57,16 +58,20 @@ def main() -> None:
             #preapring data
             tags = json_osm["elements"][0]["tags"]
             lat, lon = get_coords(json_osm["elements"][0])
-            #lat = json_osm["elements"][0]["lat"]
-            #lon = json_osm["elements"][0]["lon"]
-            #Making markup entry
+            url = tags.get("website", "")
 
+            #Making markup entry
             out_buffer += f"## {tags['name']}\n\n"
             out_buffer += "| :notebook: | |\n"
             out_buffer += "|--|--|\n"
             out_buffer += f"| **Адрес** | {tags['addr:street']} {tags['addr:housenumber']}, {tags['addr:city']} |\n"
             out_buffer += f"| **Координаты** | [{lat},{lon}](geo:{lat},{lon}) |\n"
-            out_buffer += f"| **Описание** | {place['description']} |\n\n"
+            out_buffer += f"| **Описание** | {place['description']} |\n"
+            out_buffer += f"| **Google Maps** | [LINK](https://www.google.com/maps/place/{lat},{lon}) |\n"
+
+            if url:
+                out_buffer += f"| **URL** | <{url}> |\n"
+            out_buffer += "\n"      #WE NEED this new line!
 
         with open(os.path.join("..", transformation["out"] + ".md"), "w", encoding="utf-8") as file:
             file.write(out_buffer)
