@@ -2,6 +2,8 @@
 
 Список лично проверенных мест, где можно попить пива. Нужно ли - вам решать! ;-)
 
+[КАРТА](https://umap.openstreetmap.fr/en/map/alcoholic-belgrade-map_1019755)
+
 ## Beersheep
 
 | :notebook: | |
