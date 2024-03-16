@@ -1,3 +1,4 @@
+import csv
 import os
 import json
 
@@ -39,6 +40,7 @@ def main() -> None:
 
     for transformation in json_obj:
         out_buffer = ""
+        csv_lines = [["name", "description", "lat", "lon"]]
         
         in_name = os.path.join("..", "src", transformation["in"] + ".json")
         
@@ -72,9 +74,17 @@ def main() -> None:
             if url:
                 out_buffer += f"| **URL** | <{url}> |\n"
             out_buffer += "\n"      #WE NEED this new line!
+            
+            csv_lines.append([tags['name'], place['description'], str(lat), str(lon)])
 
         with open(os.path.join("..", transformation["out"] + ".md"), "w", encoding="utf-8") as file:
             file.write(out_buffer)
+
+        with open(os.path.join("..", transformation["out"] + ".csv"), "w", encoding="utf-8") as file:
+            writer = csv.writer(file)
+            for line in csv_lines:
+                writer.writerow(line)
+                
 
 if __name__ == "__main__":
     main()
