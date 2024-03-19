@@ -2,89 +2,103 @@ import csv
 import os
 import json
 
+from dataclasses import dataclass, asdict
+
+from typing import Any
+
 import requests
 
 CFG_NAME = "cfg.json"
+
+MD_POI_FMT = \
+"""\
+## {name}
+
+| :notebook: | |
+|--|--|
+| **Адрес** | {street} {house}, {city} |
+| **Координаты** | [{lat},{lon}](geo:{lat},{lon}) |
+| **Описание** | {description} |
+| **Google Maps** | [LINK](https://www.google.com/maps/place/{lat},{lon}) |
+"""
+
+@dataclass
+class POI:
+    name: str
+    description: str
+    lat: float
+    lon: float
+    street: str
+    house: str
+    city: str
+    url: str
 
 def get_osm_data(osm_id: str) -> bytes:
     """Get OSM data"""
     id_type = osm_id[0]
     osm_id = osm_id[1:]
-    if id_type == "N":
-        url = f"https://overpass-api.de/api/interpreter?data=[out:json][timeout:25];node(id:{osm_id});out geom;"
-    elif id_type == "W":
-        url = f"https://overpass-api.de/api/interpreter?data=[out:json][timeout:25];way(id:{osm_id});out geom;"
-    
+    obj_type = {"N" : "node", "W" : "way"}[id_type]
+    url = f"https://overpass-api.de/api/interpreter?data=[out:json][timeout:25];{obj_type}(id:{osm_id});out geom;"
+
     r = requests.get(url)
     if r.status_code != 200:
         return b""
-    else:
-        return r.content
+    return r.content
 
-def get_coords(elements) -> (float, float):
+def get_coords(elements: dict[str, Any]) -> tuple[float, float]:
     """Get coords depending on object type."""
     if elements["type"] == "node":
-        return (elements["lat"], elements["lon"])
+        lat, lon = elements["lat"], elements["lon"]
     elif elements["type"] == "way":
         bounds = elements["bounds"]
         lat = (bounds["minlat"] + bounds["maxlat"]) / 2
         lon = (bounds["minlon"] + bounds["maxlon"]) / 2
-        return (lat, lon)
-    
+    return (lat, lon)
+
+def save_md(base_name: str, header: str, description: str, pois: list[POI]) -> None:
+    """Save .md file."""
+    with open(os.path.join("..", f"{base_name}.md"), "w", encoding="utf-8") as file:
+        #write header first
+        file.write(f"# {header}\n\n{description}\n\n")
+        for poi in pois:
+            entry = MD_POI_FMT.format(**asdict(poi))
+            if poi.url:
+                entry += f"| **URL** | <{poi.url}> |\n"
+            file.write(entry + "\n")    #we need this last \n!!!
+
+def save_csv(base_name: str, pois: list[POI]) -> None:
+    """Save .csv file."""
+    with open(os.path.join("..", "csv", f"{base_name}.csv"), "w", encoding="utf-8") as file:
+        writer = csv.writer(file)
+        writer.writerow(["name", "description", "lat", "lon"])
+        for poi in pois:
+            writer.writerow([poi.name, poi.description, str(poi.lat), str(poi.lon)])
 
 def main() -> None:
     """Main function."""
     with open(CFG_NAME, "r", encoding="utf-8") as file:
-        json_obj = json.load(file)
+        transforms = json.load(file)
 
+    for transform in transforms:
+        pois = []
+        in_name = os.path.join("..", "src", transform["in"] + ".json")
+        out_base = transform["out"]
 
-    for transformation in json_obj:
-        out_buffer = ""
-        csv_lines = [["name", "description", "lat", "lon"]]
-        
-        in_name = os.path.join("..", "src", transformation["in"] + ".json")
-        
-        #Adding header
-        out_buffer = f"# {transformation['hdr']}\n\n"
-        out_buffer += transformation["descr"] + "\n\n"
-        
         with open (in_name, "r", encoding="utf-8") as file:
-            json_src = json.load(file)
+            places = json.load(file)
 
-        for place in json_src:
+        for place in places:
             print (place["name"])
-            osm_id = place["id"]
-            osm_data = get_osm_data(osm_id)
-            json_osm = json.loads(osm_data)
-            
-            #preapring data
+            json_osm = json.loads(get_osm_data(place["id"]))
             tags = json_osm["elements"][0]["tags"]
             lat, lon = get_coords(json_osm["elements"][0])
-            url = tags.get("website", "")
 
-            #Making markup entry
-            out_buffer += f"## {tags['name']}\n\n"
-            out_buffer += "| :notebook: | |\n"
-            out_buffer += "|--|--|\n"
-            out_buffer += f"| **Адрес** | {tags['addr:street']} {tags['addr:housenumber']}, {tags['addr:city']} |\n"
-            out_buffer += f"| **Координаты** | [{lat},{lon}](geo:{lat},{lon}) |\n"
-            out_buffer += f"| **Описание** | {place['description']} |\n"
-            out_buffer += f"| **Google Maps** | [LINK](https://www.google.com/maps/place/{lat},{lon}) |\n"
+            pois.append(POI(tags['name'], place['description'], lat, lon,
+                tags['addr:street'], tags['addr:housenumber'], tags['addr:city'], tags.get("website")
+            ))
 
-            if url:
-                out_buffer += f"| **URL** | <{url}> |\n"
-            out_buffer += "\n"      #WE NEED this new line!
-            
-            csv_lines.append([tags['name'], place['description'], str(lat), str(lon)])
-
-        with open(os.path.join("..", transformation["out"] + ".md"), "w", encoding="utf-8") as file:
-            file.write(out_buffer)
-
-        with open(os.path.join("..", "csv", transformation["out"] + ".csv"), "w", encoding="utf-8") as file:
-            writer = csv.writer(file)
-            for line in csv_lines:
-                writer.writerow(line)
-                
+        save_md(out_base, transform['hdr'], transform['descr'], pois)
+        save_csv(out_base, pois)
 
 if __name__ == "__main__":
     main()
