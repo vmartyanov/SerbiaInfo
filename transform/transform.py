@@ -80,7 +80,7 @@ def main() -> None:
         with open(os.path.join("..", transformation["out"] + ".md"), "w", encoding="utf-8") as file:
             file.write(out_buffer)
 
-        with open(os.path.join("..", transformation["out"] + ".csv"), "w", encoding="utf-8") as file:
+        with open(os.path.join("..", "csv", transformation["out"] + ".csv"), "w", encoding="utf-8") as file:
             writer = csv.writer(file)
             for line in csv_lines:
                 writer.writerow(line)
