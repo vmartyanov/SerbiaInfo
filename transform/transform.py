@@ -22,6 +22,12 @@ MD_POI_FMT = \
 | **Google Maps** | [LINK](https://www.google.com/maps/place/{lat},{lon}) |
 """
 
+#cahing net responses
+NET_CACHE = {}
+
+#caching descriptions
+DESCR_CACHE = {}
+
 @dataclass
 class POI:
     name: str
@@ -35,6 +41,10 @@ class POI:
 
 def get_osm_data(osm_id: str) -> bytes:
     """Get OSM data"""
+
+    if osm_id in NET_CACHE:
+        return NET_CACHE[osm_id]
+
     id_type = osm_id[0]
     osm_id = osm_id[1:]
     obj_type = {"N" : "node", "W" : "way"}[id_type]
@@ -43,6 +53,8 @@ def get_osm_data(osm_id: str) -> bytes:
     r = requests.get(url)
     if r.status_code != 200:
         return b""
+
+    NET_CACHE[osm_id] = r.content
     return r.content
 
 def get_coords(elements: dict[str, Any]) -> tuple[float, float]:
@@ -74,10 +86,13 @@ def save_csv(base_name: str, pois: list[POI]) -> None:
         for poi in pois:
             writer.writerow([poi.name, poi.description, str(poi.lat), str(poi.lon)])
 
-def main() -> None:
-    """Main function."""
-    with open(CFG_NAME, "r", encoding="utf-8") as file:
-        transforms = json.load(file)
+def do_transforms(transforms: list[dict[str, Any]]) -> None:
+    """Do transforms."""
+    #list of transforms which has references, they will be produced in a 2nd pass
+    if not transforms:
+        return
+
+    ref_transforms = []
 
     for transform in transforms:
         pois = []
@@ -88,17 +103,40 @@ def main() -> None:
             places = json.load(file)
 
         for place in places:
-            print (place["name"])
+            name = place["name"]
+
+            description = place.get('description')  #get from json
+            if not description:
+                description = DESCR_CACHE.get(place["id"])     #get from cache
+                if not description:
+                    if not transform in ref_transforms:
+                        ref_transforms.append(transform)
+                        print (base_name + " -> 2nd pass")
+                    continue
+                else:
+                    print (f"\t{name} from cache")
+            else:
+                print (name)
+                DESCR_CACHE[place["id"]] = description
+
             json_osm = json.loads(get_osm_data(place["id"]))
             tags = json_osm["elements"][0]["tags"]
             lat, lon = get_coords(json_osm["elements"][0])
 
-            pois.append(POI(tags['name'], place['description'], lat, lon,
+            pois.append(POI(tags['name'], description, lat, lon,
                 tags['addr:street'], tags['addr:housenumber'], tags['addr:city'], tags.get("website")
             ))
 
         save_md(base_name, transform['hdr'], transform['descr'], pois)
         save_csv(base_name, pois)
+
+    #2nd pass
+    do_transforms(ref_transforms)
+
+def main() -> None:
+    """Main function."""
+    with open(CFG_NAME, "r", encoding="utf-8") as file:
+        do_transforms(json.load(file))
 
 if __name__ == "__main__":
     main()
