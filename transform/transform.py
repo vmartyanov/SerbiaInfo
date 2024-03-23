@@ -81,8 +81,8 @@ def main() -> None:
 
     for transform in transforms:
         pois = []
-        in_name = os.path.join("..", "src", transform["in"] + ".json")
-        out_base = transform["out"]
+        base_name = transform["file"]
+        in_name = os.path.join("..", "src", base_name + ".json")
 
         with open (in_name, "r", encoding="utf-8") as file:
             places = json.load(file)
@@ -97,8 +97,8 @@ def main() -> None:
                 tags['addr:street'], tags['addr:housenumber'], tags['addr:city'], tags.get("website")
             ))
 
-        save_md(out_base, transform['hdr'], transform['descr'], pois)
-        save_csv(out_base, pois)
+        save_md(base_name, transform['hdr'], transform['descr'], pois)
+        save_csv(base_name, pois)
 
 if __name__ == "__main__":
     main()
